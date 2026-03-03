@@ -1,5 +1,7 @@
 # MicButton - ATtiny45 Controller
 
+[![Tests](https://github.com/Nebensound/MicButton/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/Nebensound/MicButton/actions/workflows/test.yml)
+
 A Rust-based microcontroller for a microphone button, built for the ATtiny45.
 
 ## Hardware
