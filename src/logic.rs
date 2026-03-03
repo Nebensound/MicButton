@@ -281,10 +281,7 @@ mod tests {
         // Release button (after < 500 ms)
         let actions = ctrl.update(&input(200, false, false));
         assert_eq!(ctrl.state, State::Timed);
-        assert!(
-            !has_mic_click(&actions),
-            "No additional click on release"
-        );
+        assert!(!has_mic_click(&actions), "No additional click on release");
     }
 
     #[test]
@@ -590,10 +587,7 @@ mod tests {
 
         // Now!
         let actions = ctrl.update(&input_with_mic(500, false, false, true));
-        assert!(
-            has_mic_click(&actions),
-            "Mic should be corrected in Idle"
-        );
+        assert!(has_mic_click(&actions), "Mic should be corrected in Idle");
     }
 
     // ── Wrapping / Overflow ──
@@ -614,10 +608,7 @@ mod tests {
         // Timer runs past the overflow
         let actions = ctrl.update(&input(t0.wrapping_add(10_050), false, false));
         assert_eq!(ctrl.state, State::Idle);
-        assert!(
-            has_mic_click(&actions),
-            "Timer expiry across u32 overflow"
-        );
+        assert!(has_mic_click(&actions), "Timer expiry across u32 overflow");
     }
 
     #[test]
@@ -870,7 +861,10 @@ mod tests {
             click_count += 1;
         }
         assert_eq!(ctrl.state, State::Idle);
-        assert_eq!(click_count, 2, "Exactly 2 clicks: on (initial), off (held release)");
+        assert_eq!(
+            click_count, 2,
+            "Exactly 2 clicks: on (initial), off (held release)"
+        );
     }
 
     // ── Button handoff in Pressing state ──
