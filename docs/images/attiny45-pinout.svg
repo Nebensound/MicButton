@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 320" font-family="monospace" font-size="13">
+  <!-- Background -->
+  <rect width="700" height="320" fill="#ffffff" rx="8"/>
+
+  <!-- Title -->
+  <text x="350" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">ATtiny45 — DIP-8 Pinout</text>
+
+  <!-- Chip body -->
+  <rect x="250" y="50" width="200" height="220" rx="6" fill="#3a3a3a" stroke="#222" stroke-width="2"/>
+
+  <!-- Notch -->
+  <path d="M 330 50 A 20 20 0 0 0 370 50" fill="#555" stroke="#222" stroke-width="1.5"/>
+
+  <!-- Pin 1 dot -->
+  <circle cx="275" cy="75" r="5" fill="#888"/>
+
+  <!-- Left pins (1-4) -->
+  <rect x="230" y="80" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="230" y="130" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="230" y="180" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="230" y="230" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+
+  <!-- Right pins (8-5) -->
+  <rect x="440" y="80" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="440" y="130" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="440" y="180" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+  <rect x="440" y="230" width="30" height="12" fill="#bbb" stroke="#999" stroke-width="1"/>
+
+  <!-- Pin labels on chip -->
+  <text x="275" y="100" text-anchor="middle" fill="#ccc" font-size="11">RESET</text>
+  <text x="275" y="150" text-anchor="middle" fill="#ccc" font-size="11">PB3</text>
+  <text x="275" y="200" text-anchor="middle" fill="#ccc" font-size="11">PB4</text>
+  <text x="275" y="250" text-anchor="middle" fill="#ccc" font-size="11">GND</text>
+
+  <text x="425" y="100" text-anchor="middle" fill="#ccc" font-size="11">VCC</text>
+  <text x="425" y="150" text-anchor="middle" fill="#ccc" font-size="11">PB2</text>
+  <text x="425" y="200" text-anchor="middle" fill="#ccc" font-size="11">PB1</text>
+  <text x="425" y="250" text-anchor="middle" fill="#ccc" font-size="11">PB0</text>
+
+  <!-- Pin numbers -->
+  <text x="220" y="78" text-anchor="end" fill="#555" font-size="12">1</text>
+  <text x="220" y="128" text-anchor="end" fill="#555" font-size="12">2</text>
+  <text x="220" y="178" text-anchor="end" fill="#555" font-size="12">3</text>
+  <text x="220" y="228" text-anchor="end" fill="#555" font-size="12">4</text>
+
+  <text x="480" y="78" text-anchor="start" fill="#555" font-size="12">8</text>
+  <text x="480" y="128" text-anchor="start" fill="#555" font-size="12">7</text>
+  <text x="480" y="178" text-anchor="start" fill="#555" font-size="12">6</text>
+  <text x="480" y="228" text-anchor="start" fill="#555" font-size="12">5</text>
+
+  <!-- Cable lines + labels -->
+  <!-- Pin 8 VCC - Rot -->
+  <line x1="470" y1="86" x2="570" y2="86" stroke="#e53935" stroke-width="3"/>
+  <circle cx="570" cy="86" r="5" fill="#e53935"/>
+  <text x="585" y="91" fill="#e53935" font-weight="bold" font-size="12">+5V</text>
+
+  <!-- Pin 7 PB2 - Braun -->
+  <line x1="470" y1="136" x2="570" y2="136" stroke="#795548" stroke-width="3"/>
+  <circle cx="570" cy="136" r="5" fill="#795548"/>
+  <text x="585" y="141" fill="#795548" font-weight="bold" font-size="12">Button 2</text>
+
+  <!-- Pin 6 PB1 - keine Kabelverbindung -->
+  <text x="495" y="191" fill="#888" font-size="11">Status-LED</text>
+
+  <!-- Pin 5 PB0 - Gelb -->
+  <line x1="470" y1="236" x2="570" y2="236" stroke="#fdd835" stroke-width="3" stroke-opacity="0.9"/>
+  <circle cx="570" cy="236" r="5" fill="#f9a825"/>
+  <text x="585" y="241" fill="#f9a825" font-weight="bold" font-size="12">SW1 / Mic Click</text>
+
+  <!-- Pin 2 PB3 - Orange -->
+  <line x1="230" y1="136" x2="130" y2="136" stroke="#fb8c00" stroke-width="3"/>
+  <circle cx="130" cy="136" r="5" fill="#fb8c00"/>
+  <text x="118" y="141" text-anchor="end" fill="#fb8c00" font-weight="bold" font-size="12">Mic Status</text>
+
+  <!-- Pin 4 GND - Schwarz -->
+  <line x1="230" y1="236" x2="130" y2="236" stroke="#333" stroke-width="3"/>
+  <circle cx="130" cy="236" r="5" fill="#333"/>
+  <text x="118" y="241" text-anchor="end" fill="#333" font-weight="bold" font-size="12">GND</text>
+
+  <!-- Pin 1 RESET - nicht verbunden -->
+  <text x="205" y="91" text-anchor="end" fill="#888" font-size="11"></text>
+
+  <!-- Pin 3 NC -->
+  <text x="205" y="191" text-anchor="end" fill="#888" font-size="11">NC</text>
+
+  <!-- Legend -->
+  <text x="350" y="298" text-anchor="middle" fill="#999" font-size="11">Test points on JTS GM-5212SW PCB: +5V, GND, SW1, LED</text>
+</svg>

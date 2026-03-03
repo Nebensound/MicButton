@@ -1,0 +1,13 @@
+[alias]
+avr-build = "build --release -Z build-std=core --target avr-attiny45.json"
+avr-flash = "run --release -Z build-std=core --target avr-attiny45.json"
+
+# Kein default target – AVR-Build über `cargo avr-build`
+# cargo test läuft so direkt auf dem Host
+
+[target.'cfg(target_arch = "avr")']
+rustflags = ["-C", "target-cpu=attiny45"]
+runner = "./flash.sh"
+
+[env]
+AVR_CPU_FREQUENCY_HZ = "8000000"
