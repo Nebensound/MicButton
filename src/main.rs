@@ -45,22 +45,22 @@ fn millis() -> u32 {
 
 /// Mic click on PB0: briefly switch pin to output, send pulse, switch back to input
 fn mic_click(dp: &Peripherals) {
-    dp.PORTB.portb.modify(|_, w| w.pb0().clear_bit());
-    dp.PORTB.ddrb.modify(|_, w| w.pb0().set_bit());
+    dp.PORTB.portb().modify(|_, w| w.pb0().clear_bit());
+    dp.PORTB.ddrb().modify(|_, w| w.pb0().set_bit());
 
     let start = millis();
     while millis().wrapping_sub(start) < logic::CLICK_MS {}
 
-    dp.PORTB.ddrb.modify(|_, w| w.pb0().clear_bit());
-    dp.PORTB.portb.modify(|_, w| w.pb0().set_bit());
+    dp.PORTB.ddrb().modify(|_, w| w.pb0().clear_bit());
+    dp.PORTB.portb().modify(|_, w| w.pb0().set_bit());
 }
 
 /// Turn status LED on/off (PB1)
 fn led_set(dp: &Peripherals, on: bool) {
     if on {
-        dp.PORTB.portb.modify(|_, w| w.pb1().set_bit());
+        dp.PORTB.portb().modify(|_, w| w.pb1().set_bit());
     } else {
-        dp.PORTB.portb.modify(|_, w| w.pb1().clear_bit());
+        dp.PORTB.portb().modify(|_, w| w.pb1().clear_bit());
     }
 }
 
@@ -95,7 +95,7 @@ fn main() -> ! {
     let dp = Peripherals::take().unwrap();
 
     // ── Configure GPIO ──
-    dp.PORTB.ddrb.write(|w| {
+    dp.PORTB.ddrb().write(|w| {
         w.pb0()
             .clear_bit() // Input (Button 1 / Mic Click shared)
             .pb1()
@@ -105,7 +105,7 @@ fn main() -> ! {
             .pb3()
             .clear_bit() // Input (Mic Status)
     });
-    dp.PORTB.portb.write(|w| {
+    dp.PORTB.portb().write(|w| {
         w.pb0()
             .set_bit() // Pull-up Button 1
             .pb2()
@@ -113,10 +113,10 @@ fn main() -> ! {
     });
 
     // ── Timer0: CTC mode, ~1 ms interrupt at 8 MHz ──
-    dp.TC0.tccr0a.write(|w| w.wgm0().ctc());
-    dp.TC0.tccr0b.write(|w| w.cs0().prescale_64());
-    dp.TC0.ocr0a.write(|w| w.bits(124)); // 8MHz / 64 / 125 = 1000 Hz
-    dp.TC0.timsk.write(|w| w.ocie0a().set_bit());
+    dp.TC0.tccr0a().write(|w| w.wgm0().ctc());
+    dp.TC0.tccr0b().write(|w| w.cs0().prescale_64());
+    dp.TC0.ocr0a().write(|w| unsafe { w.bits(124) }); // 8MHz / 64 / 125 = 1000 Hz
+    dp.TC0.timsk().write(|w| w.ocie0a().set_bit());
 
     // SAFETY: All shared data (MILLIS) is protected via interrupt::Mutex<Cell>
     // and only accessed within interrupt::free().
@@ -130,9 +130,9 @@ fn main() -> ! {
     loop {
         let input = ButtonInput {
             now: millis(),
-            btn1: dp.PORTB.pinb.read().pb0().bit_is_clear(),
-            btn2: dp.PORTB.pinb.read().pb2().bit_is_clear(),
-            mic_on: dp.PORTB.pinb.read().pb3().bit_is_set(),
+            btn1: dp.PORTB.pinb().read().pb0().bit_is_clear(),
+            btn2: dp.PORTB.pinb().read().pb2().bit_is_clear(),
+            mic_on: dp.PORTB.pinb().read().pb3().bit_is_set(),
         };
 
         let actions = ctrl.update(&input);
