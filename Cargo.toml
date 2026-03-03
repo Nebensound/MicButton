@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Joscha Wagner"]
 description = "ATtiny45 Mic Button Controller"
 license = "MIT"
-repository = "https://github.com/joschawagner/MicButton"
+repository = "https://github.com/Nebensound/MicButton"
 
 [dependencies]
 
