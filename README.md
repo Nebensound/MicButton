@@ -18,13 +18,13 @@ The ATtiny45 is installed inside the metal housing of the JTS GM-5212SW. The mic
 
 ![ATtiny45 DIP-8 Pinout with cable colors](docs/images/attiny45-pinout.svg)
 
-| Test Point | ATtiny45 Connection | Pin | Cable Color |
-|------------|---------------------|-----|-------------|
-| `+5V` | VCC | 8 | Red |
-| `GND` | GND | 4 | Black |
-| `SW1` | PB0 (Button 1 / Mic Click) | 5 | Yellow |
-| `LED` | PB3 (Mic Status) | 2 | Orange |
-| – | PB2 (Button 2) | 7 | Brown |
+| Test Point | ATtiny45 Connection        | Pin | Cable Color |
+| ---------- | -------------------------- | --- | ----------- |
+| `+5V`      | VCC                        | 8   | Red         |
+| `SW2`      | GND                        | 4   | Black       |
+| `SW1`      | PB0 (Button 1 / Mic Click) | 5   | Yellow      |
+| `LED`      | PB3 (Mic Status)           | 2   | White       |
+| –          | PB2 (Button 2)             | 7   | Brown       |
 
 ![GM-5212SW PCB – top view with test points](docs/images/Aufsicht_Platine.jpeg)
 
@@ -46,14 +46,14 @@ Both buttons are interchangeable and can be pressed individually or simultaneous
 
 ## ATtiny45 Pin Assignment
 
-| Pin | Function | Direction |
-|-----|----------|-----------|
+| Pin | Function                      | Direction                                       |
+| --- | ----------------------------- | ----------------------------------------------- |
 | PB0 | Button 1 + Mic Click (shared) | Input (external pull-up) / Output (alternating) |
-| PB1 | Status LED | Output |
-| PB2 | Button 2 | Input (internal pull-up) |
-| PB3 | Mic Status | Input (HIGH = mic on) |
-| VCC | 5 V | – |
-| GND | Ground | – |
+| PB1 | Status LED                    | Output                                          |
+| PB2 | Button 2                      | Input (internal pull-up)                        |
+| PB3 | Mic Status                    | Input (HIGH = mic on)                           |
+| VCC | 5 V                           | –                                               |
+| GND | Ground                        | –                                               |
 
 ## Prerequisites
 
@@ -66,16 +66,19 @@ rustup component add rust-src --toolchain nightly
 ### AVR-GCC Toolchain
 
 **macOS:**
+
 ```bash
 brew install avr-gcc avrdude
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt install gcc-avr avr-libc avrdude
 ```
 
 **Windows (MSYS2):**
+
 ```bash
 pacman -S mingw-w64-x86_64-avr-gcc mingw-w64-x86_64-avrdude
 ```
@@ -103,13 +106,13 @@ The ATtiny45 is flashed via the ISP interface using a USBasp programmer. The wir
 ### ISP Wiring
 
 | USBasp (10-Pin Header) | ATtiny45 Pin | Function |
-|------------------------|-------------|----------|
-| MOSI | PB0 (Pin 5) | Data In |
-| MISO | PB1 (Pin 6) | Data Out |
-| SCK | PB2 (Pin 7) | Clock |
-| RESET | PB5 (Pin 1) | Reset |
-| VCC | VCC (Pin 8) | +5 V |
-| GND | GND (Pin 4) | Ground |
+| ---------------------- | ------------ | -------- |
+| MOSI                   | PB0 (Pin 5)  | Data In  |
+| MISO                   | PB1 (Pin 6)  | Data Out |
+| SCK                    | PB2 (Pin 7)  | Clock    |
+| RESET                  | PB5 (Pin 1)  | Reset    |
+| VCC                    | VCC (Pin 8)  | +5 V     |
+| GND                    | GND (Pin 4)  | Ground   |
 
 > **Tip:** The USBasp powers the ATtiny45 through the ISP header – no external power supply needed.
 
@@ -152,11 +155,11 @@ avrdude -c usbasp -p t45 -U flash:w:target/avr-attiny45/release/mic-button.hex:i
 
 ## Project Structure
 
-| File | Description |
-|------|-------------|
-| `src/main.rs` | Hardware init, GPIO, timer, ISR – ATtiny45-specific |
-| `src/logic.rs` | State machine, testable without hardware |
-| `src/lib.rs` | Library crate for tests |
-| `avr-attiny45.json` | Custom target spec for the ATtiny45 |
-| `Makefile` | Build, test, and flash targets |
-| `flash.sh` | Runner script for `cargo avr-flash` (objcopy + avrdude) |
+| File                | Description                                             |
+| ------------------- | ------------------------------------------------------- |
+| `src/main.rs`       | Hardware init, GPIO, timer, ISR – ATtiny45-specific     |
+| `src/logic.rs`      | State machine, testable without hardware                |
+| `src/lib.rs`        | Library crate for tests                                 |
+| `avr-attiny45.json` | Custom target spec for the ATtiny45                     |
+| `Makefile`          | Build, test, and flash targets                          |
+| `flash.sh`          | Runner script for `cargo avr-flash` (objcopy + avrdude) |
