@@ -29,7 +29,7 @@ use mic_button::logic::{self, Action, ButtonInput, Controller, LedState};
 /// Millisecond counter, incremented by the timer interrupt
 static MILLIS: interrupt::Mutex<Cell<u32>> = interrupt::Mutex::new(Cell::new(0));
 
-/// Timer0 Compare Match A – fires every ~1 ms
+// Timer0 Compare Match A – fires every ~1 ms
 #[avr_device::interrupt(attiny85)]
 fn TIMER0_COMPA() {
     interrupt::free(|cs| {
