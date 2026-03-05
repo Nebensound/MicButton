@@ -11,6 +11,8 @@ pub const CLICK_MS: u32 = 100; // GPIO pulse duration (click)
 pub const SYNC_MS: u32 = 500; // Tolerance before mic status is corrected
 pub const BLINK_MS: u32 = 500; // Blink interval for status LED
 pub const STARTUP_BLINK_MS: u32 = 100; // Startup blink duration per phase
+pub const DEBOUNCE_MS: u32 = 30; // Debounce window for button inputs
+pub const GAP_MS: u32 = 200; // Delay after Held release before sending mic-off click
 
 // ── Input ──
 
@@ -58,6 +60,8 @@ pub enum State {
     Timed,
     /// Mic on as long as button is held (long press)
     Held,
+    /// Short delay after Held release before sending mic-off click
+    Gap,
 }
 
 /// The controller holds the entire state machine state
@@ -65,9 +69,20 @@ pub struct Controller {
     pub state: State,
     press_start: u32,
     timer_start: u32,
+    gap_start: u32,
     was_active: bool,
+    /// True when the current press was initiated by btn1 (PB0),
+    /// which physically toggles the mic on its own.
+    physical_toggle: bool,
+    // Debounced button states and raw tracking
+    raw_btn1: bool,
+    raw_btn2: bool,
+    stable_btn1: bool,
+    stable_btn2: bool,
     last_btn1: bool,
     last_btn2: bool,
+    btn1_change_at: u32,
+    btn2_change_at: u32,
     mismatch_since: u32,
     mismatch_active: bool,
 }
@@ -78,9 +93,17 @@ impl Controller {
             state: State::Idle,
             press_start: 0,
             timer_start: 0,
+            gap_start: 0,
             was_active: false,
+            physical_toggle: false,
+            raw_btn1: false,
+            raw_btn2: false,
+            stable_btn1: false,
+            stable_btn2: false,
             last_btn1: false,
             last_btn2: false,
+            btn1_change_at: 0,
+            btn2_change_at: 0,
             mismatch_since: 0,
             mismatch_active: false,
         }
@@ -96,13 +119,30 @@ impl Controller {
 
         let now = input.now;
 
-        // ── Detect edges ──
-        let pressed1 = input.btn1 && !self.last_btn1;
-        let released1 = !input.btn1 && self.last_btn1;
-        let pressed2 = input.btn2 && !self.last_btn2;
-        let released2 = !input.btn2 && self.last_btn2;
-        self.last_btn1 = input.btn1;
-        self.last_btn2 = input.btn2;
+        // ── Debounce ──
+        if input.btn1 != self.raw_btn1 {
+            self.raw_btn1 = input.btn1;
+            self.btn1_change_at = now;
+        }
+        if now.wrapping_sub(self.btn1_change_at) >= DEBOUNCE_MS {
+            self.stable_btn1 = self.raw_btn1;
+        }
+
+        if input.btn2 != self.raw_btn2 {
+            self.raw_btn2 = input.btn2;
+            self.btn2_change_at = now;
+        }
+        if now.wrapping_sub(self.btn2_change_at) >= DEBOUNCE_MS {
+            self.stable_btn2 = self.raw_btn2;
+        }
+
+        // ── Detect edges (on debounced signals) ──
+        let pressed1 = self.stable_btn1 && !self.last_btn1;
+        let released1 = !self.stable_btn1 && self.last_btn1;
+        let pressed2 = self.stable_btn2 && !self.last_btn2;
+        let released2 = !self.stable_btn2 && self.last_btn2;
+        self.last_btn1 = self.stable_btn1;
+        self.last_btn2 = self.stable_btn2;
 
         let any_pressed = pressed1 || pressed2;
         let all_released = (released1 && !input.btn2) || (released2 && !input.btn1);
@@ -113,8 +153,13 @@ impl Controller {
                 if any_pressed {
                     self.press_start = now;
                     self.was_active = false;
-                    actions[action_idx] = Action::MicClick;
-                    action_idx += 1;
+                    self.physical_toggle = pressed1;
+                    if !pressed1 {
+                        // btn2 only: PB2 doesn't physically toggle the mic,
+                        // so we must send a firmware click on PB0.
+                        actions[action_idx] = Action::MicClick;
+                        action_idx += 1;
+                    }
                     self.state = State::Pressing;
                 }
             }
@@ -122,8 +167,12 @@ impl Controller {
             State::Pressing => {
                 if all_released {
                     if self.was_active {
-                        actions[action_idx] = Action::MicClick;
-                        action_idx += 1;
+                        if !self.physical_toggle {
+                            // btn2 initiated: firmware must send click to turn off
+                            actions[action_idx] = Action::MicClick;
+                            action_idx += 1;
+                        }
+                        // btn1: physical press already toggled mic off
                         self.state = State::Idle;
                     } else {
                         self.timer_start = now;
@@ -135,9 +184,14 @@ impl Controller {
             }
 
             State::Timed => {
-                if any_pressed {
+                if pressed1 {
+                    // btn1: physical press toggles mic off → done
+                    self.state = State::Idle;
+                } else if pressed2 {
+                    // btn2: no physical toggle, go to Pressing for turn-off
                     self.press_start = now;
                     self.was_active = true;
+                    self.physical_toggle = false;
                     self.state = State::Pressing;
                 } else if now.wrapping_sub(self.timer_start) >= TIMER_MS {
                     actions[action_idx] = Action::MicClick;
@@ -148,6 +202,13 @@ impl Controller {
 
             State::Held => {
                 if all_released {
+                    self.gap_start = now;
+                    self.state = State::Gap;
+                }
+            }
+
+            State::Gap => {
+                if now.wrapping_sub(self.gap_start) >= GAP_MS {
                     actions[action_idx] = Action::MicClick;
                     action_idx += 1;
                     self.state = State::Idle;
@@ -164,11 +225,12 @@ impl Controller {
                 LedState::Blink(phase == 0)
             }
             State::Held => LedState::On,
+            State::Gap => LedState::On,
         };
         actions[action_idx] = Action::Led(led);
 
         // ── Mic status synchronization ──
-        let mic_should_be_on = matches!(self.state, State::Timed | State::Held);
+        let mic_should_be_on = matches!(self.state, State::Timed | State::Held | State::Gap);
         let mic_actual = input.mic_on;
 
         if mic_actual != mic_should_be_on && !matches!(self.state, State::Pressing) {
@@ -250,22 +312,25 @@ mod tests {
     }
 
     #[test]
-    fn idle_button1_press_transitions_to_pressing() {
+    fn idle_button1_press_no_mic_click() {
         let mut ctrl = Controller::new();
         let actions = ctrl.update(&input(100, true, false));
         assert_eq!(ctrl.state, State::Pressing);
         assert!(
-            has_mic_click(&actions),
-            "Mic should be turned on when pressed"
+            !has_mic_click(&actions),
+            "btn1 physically toggles mic – no firmware click needed"
         );
     }
 
     #[test]
-    fn idle_button2_press_transitions_to_pressing() {
+    fn idle_button2_press_sends_mic_click() {
         let mut ctrl = Controller::new();
         let actions = ctrl.update(&input(100, false, true));
         assert_eq!(ctrl.state, State::Pressing);
-        assert!(has_mic_click(&actions));
+        assert!(
+            has_mic_click(&actions),
+            "btn2 needs firmware click to toggle mic"
+        );
     }
 
     // ── Short press: Idle → Pressing → Timed → Idle ──
@@ -308,22 +373,40 @@ mod tests {
     }
 
     #[test]
-    fn timed_press_to_turn_off() {
+    fn timed_btn1_press_turns_off_directly() {
         let mut ctrl = Controller::new();
 
-        // Short press → Timed
+        // Short press btn1 → Timed
         ctrl.update(&input(100, true, false));
         ctrl.update(&input(200, false, false));
         assert_eq!(ctrl.state, State::Timed);
 
-        // Another press during Timed → Pressing (was_active=true)
-        ctrl.update(&input(1000, true, false));
+        // btn1 press during Timed → physical toggle turns mic off → Idle
+        let actions = ctrl.update(&input(1000, true, false));
+        assert_eq!(ctrl.state, State::Idle);
+        assert!(
+            !has_mic_click(&actions),
+            "btn1 physically toggles mic off – no firmware click"
+        );
+    }
+
+    #[test]
+    fn timed_btn2_press_turns_off_via_firmware() {
+        let mut ctrl = Controller::new();
+
+        // Short press btn1 → Timed
+        ctrl.update(&input(100, true, false));
+        ctrl.update(&input(200, false, false));
+        assert_eq!(ctrl.state, State::Timed);
+
+        // btn2 press during Timed → Pressing (was_active=true)
+        ctrl.update(&input(1000, false, true));
         assert_eq!(ctrl.state, State::Pressing);
 
-        // Short release → should turn off (was previously active)
+        // Short release → firmware click to turn off
         let actions = ctrl.update(&input(1100, false, false));
         assert_eq!(ctrl.state, State::Idle);
-        assert!(has_mic_click(&actions), "Mic should be turned off");
+        assert!(has_mic_click(&actions), "btn2 needs firmware click to turn off");
     }
 
     // ── Long press: Idle → Pressing → Held → Idle ──
@@ -366,11 +449,14 @@ mod tests {
     // ── Both buttons ──
 
     #[test]
-    fn both_buttons_trigger_pressing() {
+    fn both_buttons_trigger_pressing_no_click() {
         let mut ctrl = Controller::new();
         let actions = ctrl.update(&input(100, true, true));
         assert_eq!(ctrl.state, State::Pressing);
-        assert!(has_mic_click(&actions));
+        assert!(
+            !has_mic_click(&actions),
+            "btn1 is included → physical toggle, no firmware click"
+        );
     }
 
     #[test]
@@ -627,40 +713,68 @@ mod tests {
     // ── Double press / re-press ──
 
     #[test]
-    fn double_press_in_timed_turns_off() {
+    fn btn1_double_press_in_timed_goes_idle() {
         let mut ctrl = Controller::new();
 
-        // First short press → Timed
+        // First short press btn1 → Timed
         ctrl.update(&input(100, true, false));
         ctrl.update(&input(200, false, false));
         assert_eq!(ctrl.state, State::Timed);
 
-        // Second short press → Pressing (was_active=true)
-        ctrl.update(&input(1000, true, false));
+        // Second btn1 press → physical toggle off → Idle directly
+        let actions = ctrl.update(&input(1000, true, false));
+        assert_eq!(ctrl.state, State::Idle);
+        assert!(!has_mic_click(&actions));
+    }
+
+    #[test]
+    fn btn2_double_press_in_timed_turns_off() {
+        let mut ctrl = Controller::new();
+
+        // First short press btn2 → Timed
+        ctrl.update(&input(100, false, true));
+        ctrl.update(&input(200, false, false));
+        assert_eq!(ctrl.state, State::Timed);
+
+        // Second btn2 press → Pressing (was_active=true)
+        ctrl.update(&input(1000, false, true));
         assert_eq!(ctrl.state, State::Pressing);
 
-        // Release → Idle (mic off)
+        // Release → Idle (firmware click off)
         let actions = ctrl.update(&input(1100, false, false));
         assert_eq!(ctrl.state, State::Idle);
         assert!(has_mic_click(&actions));
     }
 
     #[test]
-    fn long_press_during_timed_transitions_to_held() {
+    fn btn1_long_press_during_timed_goes_idle() {
         let mut ctrl = Controller::new();
 
-        // Short press → Timed
+        // Short press btn1 → Timed
         ctrl.update(&input(100, true, false));
         ctrl.update(&input(200, false, false));
         assert_eq!(ctrl.state, State::Timed);
 
-        // New long press during Timed
+        // btn1 press during Timed → physical toggle off → Idle
         ctrl.update(&input(1000, true, false));
+        assert_eq!(ctrl.state, State::Idle);
+    }
+
+    #[test]
+    fn btn2_long_press_during_timed_transitions_to_held() {
+        let mut ctrl = Controller::new();
+
+        // Short press btn2 → Timed
+        ctrl.update(&input(100, false, true));
+        ctrl.update(&input(200, false, false));
+        assert_eq!(ctrl.state, State::Timed);
+
+        // New long press btn2 during Timed
+        ctrl.update(&input(1000, false, true));
         assert_eq!(ctrl.state, State::Pressing);
 
-        // Hold → was_active is true, but ≥500ms → Held
-        // (Note: was_active is set to true, HOLD detection is based on time only)
-        ctrl.update(&input(1500, true, false));
+        // Hold ≥500ms → Held
+        ctrl.update(&input(1500, false, true));
         assert_eq!(ctrl.state, State::Held);
     }
 
@@ -700,11 +814,11 @@ mod tests {
     // ── Mic click counter ──
 
     #[test]
-    fn short_press_cycle_produces_two_clicks() {
+    fn btn1_short_press_cycle_produces_one_click() {
         let mut ctrl = Controller::new();
         let mut click_count = 0;
 
-        // Press → 1 click
+        // Press btn1 → no firmware click (physical toggle)
         let a = ctrl.update(&input(100, true, false));
         if has_mic_click(&a) {
             click_count += 1;
@@ -716,21 +830,47 @@ mod tests {
             click_count += 1;
         }
 
-        // Timer expired → 1 click
+        // Timer expired → 1 click (firmware turns mic off)
         let a = ctrl.update(&input(10_200, false, false));
         if has_mic_click(&a) {
             click_count += 1;
         }
 
-        assert_eq!(click_count, 2, "Exactly 2 clicks: on, off");
+        assert_eq!(click_count, 1, "Only 1 firmware click: timer-off");
     }
 
     #[test]
-    fn hold_cycle_produces_two_clicks() {
+    fn btn2_short_press_cycle_produces_two_clicks() {
         let mut ctrl = Controller::new();
         let mut click_count = 0;
 
-        // Press → 1 click
+        // Press btn2 → 1 firmware click (on)
+        let a = ctrl.update(&input(100, false, true));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        // Release → no click (timer starts)
+        let a = ctrl.update(&input(200, false, false));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        // Timer expired → 1 click (off)
+        let a = ctrl.update(&input(10_200, false, false));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        assert_eq!(click_count, 2, "2 clicks: firmware-on, firmware-off");
+    }
+
+    #[test]
+    fn btn1_hold_cycle_produces_one_click() {
+        let mut ctrl = Controller::new();
+        let mut click_count = 0;
+
+        // Press btn1 → no firmware click (physical toggle)
         let a = ctrl.update(&input(100, true, false));
         if has_mic_click(&a) {
             click_count += 1;
@@ -742,42 +882,94 @@ mod tests {
             click_count += 1;
         }
 
-        // Release → 1 click
+        // Release → 1 click (firmware turns mic off)
         let a = ctrl.update(&input(800, false, false));
         if has_mic_click(&a) {
             click_count += 1;
         }
 
-        assert_eq!(click_count, 2, "Exactly 2 clicks: on, off");
+        assert_eq!(click_count, 1, "Only 1 firmware click: release-off");
     }
 
     #[test]
-    fn toggle_off_in_timed_produces_two_clicks() {
+    fn btn2_hold_cycle_produces_two_clicks() {
         let mut ctrl = Controller::new();
         let mut click_count = 0;
 
-        // Short press → Timed (1 click)
+        // Press btn2 → 1 firmware click (on)
+        let a = ctrl.update(&input(100, false, true));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        // Hold threshold → no click
+        let a = ctrl.update(&input(700, false, true));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        // Release → 1 click (off)
+        let a = ctrl.update(&input(800, false, false));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        assert_eq!(click_count, 2, "2 clicks: firmware-on, firmware-off");
+    }
+
+    #[test]
+    fn btn1_toggle_off_in_timed_produces_zero_clicks() {
+        let mut ctrl = Controller::new();
+        let mut click_count = 0;
+
+        // Short press btn1 → Timed (no firmware click)
         let a = ctrl.update(&input(100, true, false));
         if has_mic_click(&a) {
             click_count += 1;
         }
         ctrl.update(&input(200, false, false));
 
-        // Second short press in Timed → Pressing
+        // btn1 press during Timed → physical toggle off → Idle
         let a = ctrl.update(&input(1000, true, false));
         if has_mic_click(&a) {
             click_count += 1;
         }
 
-        // Release → Idle (1 click)
+        assert_eq!(ctrl.state, State::Idle);
+        assert_eq!(
+            click_count, 0,
+            "Zero firmware clicks: btn1 physically toggles on and off"
+        );
+    }
+
+    #[test]
+    fn btn2_toggle_off_in_timed_produces_two_clicks() {
+        let mut ctrl = Controller::new();
+        let mut click_count = 0;
+
+        // Short press btn2 → Timed (1 firmware click on)
+        let a = ctrl.update(&input(100, false, true));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+        ctrl.update(&input(200, false, false));
+
+        // btn2 press during Timed → Pressing (was_active=true)
+        let a = ctrl.update(&input(1000, false, true));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+
+        // Release → Idle (1 firmware click off)
         let a = ctrl.update(&input(1100, false, false));
         if has_mic_click(&a) {
             click_count += 1;
         }
 
+        assert_eq!(ctrl.state, State::Idle);
         assert_eq!(
             click_count, 2,
-            "Exactly 2 clicks: on, off (no click on re-press in Timed)"
+            "2 firmware clicks: on (btn2 press), off (btn2 release)"
         );
     }
 
@@ -832,30 +1024,30 @@ mod tests {
     // ── Timed → long press → Held → release ──
 
     #[test]
-    fn timed_then_long_repress_to_held_and_release() {
+    fn btn2_timed_then_long_repress_to_held_and_release() {
         let mut ctrl = Controller::new();
         let mut click_count = 0;
 
-        // Short press → Timed (1 click)
-        let a = ctrl.update(&input(100, true, false));
+        // Short press btn2 → Timed (1 firmware click on)
+        let a = ctrl.update(&input(100, false, true));
         if has_mic_click(&a) {
             click_count += 1;
         }
         ctrl.update(&input(200, false, false));
         assert_eq!(ctrl.state, State::Timed);
 
-        // Re-press during Timed → Pressing (was_active=true)
-        let a = ctrl.update(&input(1000, true, false));
+        // Re-press btn2 during Timed → Pressing (was_active=true)
+        let a = ctrl.update(&input(1000, false, true));
         if has_mic_click(&a) {
             click_count += 1;
         }
         assert_eq!(ctrl.state, State::Pressing);
 
         // Hold ≥500ms → Held
-        ctrl.update(&input(1500, true, false));
+        ctrl.update(&input(1500, false, true));
         assert_eq!(ctrl.state, State::Held);
 
-        // Release → Idle (1 click)
+        // Release → Idle (1 firmware click off)
         let a = ctrl.update(&input(1600, false, false));
         if has_mic_click(&a) {
             click_count += 1;
@@ -863,7 +1055,32 @@ mod tests {
         assert_eq!(ctrl.state, State::Idle);
         assert_eq!(
             click_count, 2,
-            "Exactly 2 clicks: on (initial), off (held release)"
+            "2 firmware clicks: on (btn2 press), off (held release)"
+        );
+    }
+
+    #[test]
+    fn btn1_timed_repress_goes_idle() {
+        let mut ctrl = Controller::new();
+        let mut click_count = 0;
+
+        // Short press btn1 → Timed (no firmware click)
+        let a = ctrl.update(&input(100, true, false));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+        ctrl.update(&input(200, false, false));
+        assert_eq!(ctrl.state, State::Timed);
+
+        // Re-press btn1 during Timed → physical toggle off → Idle
+        let a = ctrl.update(&input(1000, true, false));
+        if has_mic_click(&a) {
+            click_count += 1;
+        }
+        assert_eq!(ctrl.state, State::Idle);
+        assert_eq!(
+            click_count, 0,
+            "Zero firmware clicks: btn1 toggles physically both times"
         );
     }
 

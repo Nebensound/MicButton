@@ -106,10 +106,8 @@ fn main() -> ! {
             .clear_bit() // Input (Mic Status)
     });
     dp.PORTB.portb().write(|w| {
-        w.pb0()
-            .set_bit() // Pull-up Button 1
-            .pb2()
-            .set_bit() // Pull-up Button 2
+        w.pb2()
+            .set_bit() // Pull-up Button 2 (PB0 has external pull-up)
     });
 
     // ── Timer0: CTC mode, ~1 ms interrupt at 8 MHz ──

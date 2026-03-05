@@ -35,8 +35,9 @@ ATtiny45 Mic Button Controller in Rust (`no_std`, AVR target).
 
 See [README.md](../README.md#attiny45-pin-assignment).
 
-## State Machine
-
-`Idle` → `Pressing` → `Timed` (10 s) or `Held` → `Idle`
-
-Both buttons are interchangeable. Mic sync corrects after 500 ms mismatch.
+## Expected Behavior
+Button 1 is directly connected to the mic. If pressed the mic will turn on. if pressed again the mic will turn off. Button 2 is not connected to the mic. PB0 needs to be set high to simulate the button press on Button 1 to sync the two. 
+Short Press: Mic on -> wait 10s -> Mic off
+Long Press: Mic on -> wait for button release -> Mic off
+Make sure to handle debouncing for both buttons, and ensure that the mic state is correctly synchronized between the two buttons.
+Make sure to have some gap between the presses (eg after a long press wait a short amount of time before turning the mic off).
