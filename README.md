@@ -28,6 +28,8 @@ The ATtiny45 is installed inside the metal housing of the JTS GM-5212SW. The mic
 
 ![GM-5212SW PCB – top view with test points](docs/images/Aufsicht_Platine.jpeg)
 
+The 3 Pole XLR connector is replaced with a 5 Pole XLR connector to be able to wire out the Button 2 signal.
+
 ## How It Works
 
 ### Buttons
