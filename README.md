@@ -6,10 +6,11 @@ A Rust-based microcontroller for a microphone button, built for the ATtiny45.
 
 ## Hardware
 
-- **MCU**: ATtiny45 @ 8 MHz (internal oscillator)
+- **MCU**: ATtiny45 @ 1 MHz (internal oscillator, CKDIV8 active)
 - **Microphone**: JTS GM-5212SW (electret gooseneck microphone with on/off switch)
-- **Buttons**: Push buttons on PB0 (external pull-up) and PB2 (internal pull-up) to GND
-- **LED**: Status LED on PB1
+- **Transistor**: D882 NPN (TO-126) – bridges SW1↔SW2 to simulate a button press
+- **Buttons**: Push buttons on PB0 (3.3V pull-up on mic PCB) and PB2 (internal pull-up)
+- **LED**: Status LED on PB4
 - **Mic Status**: Input on PB3 (HIGH = mic on)
 
 ### Wiring
@@ -18,13 +19,17 @@ The ATtiny45 is installed inside the metal housing of the JTS GM-5212SW. The mic
 
 ![ATtiny45 DIP-8 Pinout with cable colors](docs/images/attiny45-pinout.svg)
 
-| Test Point | ATtiny45 Connection        | Pin | Cable Color |
-| ---------- | -------------------------- | --- | ----------- |
-| `+5V`      | VCC                        | 8   | Red         |
-| `SW2`      | GND                        | 4   | Black       |
-| `SW1`      | PB0 (Button 1 / Mic Click) | 5   | Yellow      |
-| `LED`      | PB3 (Mic Status)           | 2   | White       |
-| –          | PB2 (Button 2)             | 7   | Brown       |
+| Test Point | ATtiny45 Connection   | Pin | Cable Color |
+| ---------- | --------------------- | --- | ----------- |
+| `+5V`      | VCC                   | 8   | Red         |
+| Chassis    | GND                   | 4   | Black       |
+| `SW1`      | PB0 (Button 1 read)   | 5   | Yellow      |
+| `SW1`      | D882 Collector        | –   | –           |
+| `SW2`      | D882 Emitter          | –   | –           |
+| –          | PB1 → 1kΩ → D882 Base | 6   | Blue        |
+| `LED`      | PB3 (Mic Status)      | 2   | White       |
+| –          | PB4 (Status LED)      | 3   | –           |
+| –          | PB2 (Button 2)        | 7   | Brown       |
 
 ![GM-5212SW PCB – top view with test points](docs/images/Aufsicht_Platine.jpeg)
 
@@ -32,10 +37,23 @@ The 3 Pole XLR connector is replaced with a 5 Pole XLR connector to be able to w
 
 ## How It Works
 
+### Mic Click Circuit
+
+The mic PCB uses a 3.3V IC with a voltage divider on the button line:
+
+- **SW1**: 3.3V pull-up (~200kΩ) – reads ~3V when open, ~1V when pressed
+- **SW2**: 91kΩ to GND – reads 0V when open, ~1.1V when pressed
+- The physical button bridges SW1↔SW2
+
+The ATtiny cannot bridge these directly (its GND is chassis ground, not SW2). A **D882 NPN transistor** is used as an electronic switch:
+
+- **PB1 HIGH** → D882 conducts → SW1↔SW2 shorted (= button press)
+- **PB1 LOW** → D882 off → no effect
+
 ### Buttons
 
-- **Button 1 (PB0)**: Shared pin – the push button and mic-click line share the same pin. A button press pulls PB0 directly to LOW, which already triggers the mic click. The controller detects the press and processes it logically only (no additional pulse needed).
-- **Button 2 (PB2)**: Simple button input (pull-up). Works identically to Button 1 but must mirror the click to PB0: PB0 is briefly switched to output and a 100 ms LOW pulse is generated.
+- **Button 1 (PB0)**: Reads SW1 from the mic PCB (3.3V pull-up, no internal pull-up). A press pulls SW1 to ~1V which is detected as LOW. To trigger a mic click, PB1 drives the D882 transistor.
+- **Button 2 (PB2)**: Simple button input (internal pull-up). Works identically to Button 1 – also triggers the D882 via PB1.
 
 Both buttons are interchangeable and can be pressed individually or simultaneously.
 
@@ -48,14 +66,15 @@ Both buttons are interchangeable and can be pressed individually or simultaneous
 
 ## ATtiny45 Pin Assignment
 
-| Pin | Function                      | Direction                                       |
-| --- | ----------------------------- | ----------------------------------------------- |
-| PB0 | Button 1 + Mic Click (shared) | Input (external pull-up) / Output (alternating) |
-| PB1 | Status LED                    | Output                                          |
-| PB2 | Button 2                      | Input (internal pull-up)                        |
-| PB3 | Mic Status                    | Input (HIGH = mic on)                           |
-| VCC | 5 V                           | –                                               |
-| GND | Ground                        | –                                               |
+| Pin | Function                      | Direction                |
+| --- | ----------------------------- | ------------------------ |
+| PB0 | Button 1 (reads SW1)          | Input (3.3V PCB pull-up) |
+| PB1 | Mic Click (D882 Base via 1kΩ) | Output                   |
+| PB2 | Button 2                      | Input (internal pull-up) |
+| PB3 | Mic Status                    | Input (HIGH = mic on)    |
+| PB4 | Status LED                    | Output                   |
+| VCC | 5 V                           | –                        |
+| GND | Ground (chassis)              | –                        |
 
 ## Prerequisites
 
