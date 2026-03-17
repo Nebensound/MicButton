@@ -71,7 +71,7 @@ Both buttons are interchangeable and can be pressed individually or simultaneous
 | PB0 | Button 1 (reads SW1)          | Input (3.3V PCB pull-up) |
 | PB1 | Mic Click (D882 Base via 1kΩ) | Output                   |
 | PB2 | Button 2                      | Input (internal pull-up) |
-| PB3 | Mic Status                    | Input (HIGH = mic on)    |
+| PB3 | Mic Status (ADC3)             | Analog Input (2.7 V = off, 3.7 V = on, threshold 3.2 V) |
 | PB4 | Status LED                    | Output                   |
 | VCC | 5 V                           | –                        |
 | GND | Ground (chassis)              | –                        |
